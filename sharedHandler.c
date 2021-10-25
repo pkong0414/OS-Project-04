@@ -68,6 +68,7 @@ sharedMem *getSharedMemory(){
 
 int removeShm(){
     int error = 0;
+    printf("Detaching shared memory...\n");
 
     if(shmdt(shmaddr) == -1){
         printf("Failed to detach shared memory address\n");
@@ -81,6 +82,8 @@ int removeShm(){
         return 0;
     }
     errno = error;
+
+    printf("DONE!\n");
     return -1;
 }
 

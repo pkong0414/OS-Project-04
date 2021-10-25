@@ -26,23 +26,64 @@ int waitStatus;                                     //This is for managing our p
 sharedMem *shm;                                     //shared memory object
 int semID;                                          //SEMAPHORE ID
 char *execArgs[1];                                  //exec arguments
+struct sembuf semW;
+struct sembuf semS;
 
-int main(void) {
+int main(int argc, char**argv) {
     printf("inside parent main\n");
+    //initializing shared memory and semaphore
     initShm();
+    initSem();
 
-    setupinterrupt();
-    setupitimer( MAX_SECONDS );
-    shm = getSharedMemory();                    //getting shared memory
-    while(1) {
-        while (currentConcurrentProcesses < 20) {
-            if(totalProcessesCreated >= 20)
-                break;                          //getting out of the while loop
-            createChild();
-        }
-        break;
+    if( setupUserInterrupt() == -1 ){
+        perror( "failed to set up a user kill signal.\n");
+        return 1;
     }
 
+    //we'll be parsing our arguments here
+
+    //setting up interrupts after parsing arguments
+    if (setupinterrupt() == -1) {
+        perror("Failed to set up handler for SIGALRM");
+        return 1;
+    }
+
+    if (setupitimer(MAX_SECONDS) == -1) {
+        perror("Failed to set up the ITIMER_PROF interval timer");
+        return 1;
+    }
+
+    shm = getSharedMemory();                    //getting shared memory
+    while(1) {
+        while (currentConcurrentProcesses < 19) {
+            if(totalProcessesCreated >= 50)
+                break;                          //getting out of the while loop
+            semWait(semW);
+            createChild();
+        }
+        if(currentConcurrentProcesses >= 19) {
+            if (wait(&waitStatus) == -1) {
+                perror("Failed to wait for child\n");
+            } else {
+                //we are waiting for our processes to end
+                if (WIFEXITED(waitStatus)) {
+                    currentConcurrentProcesses--;
+                    printf("current concurrent process %d\n", currentConcurrentProcesses);
+                    printf("Child process successfully exited with status: %d\n", waitStatus);
+                    printf("total processes created: %d\n", totalProcessesCreated);
+                    //********************************** EXIT SECTION **********************************************
+                    //******************************** REMAINDER SECTION *******************************************
+                }
+            }
+        }
+        if(totalProcessesCreated >= 50){
+            //we'll want a condition to break out of our loop
+
+            break;
+        }
+    }
+
+    removeSem();
     removeShm();
     exit(EXIT_SUCCESS);
 }
@@ -53,7 +94,7 @@ void createChild(){
     if (currentConcurrentProcesses <= MAX_PROC) {
         if ((pid = fork()) == -1) {
             perror("Failed to create grandchild process\n");
-            if (removeShm(shmID, shm) == -1) {
+            if (removeShm() == -1) {
                 perror("Failed to destroy shared memory segment");
             }
             exit(EXIT_FAILURE);
@@ -69,19 +110,9 @@ void createChild(){
             sleep(1);
             execl("./user", execArgs[0], 1, NULL);
         } else {
-            /* the parent of grandchild process */
-            if (wait(&waitStatus) == -1) {
-                perror("Failed to wait for grandchild\n");
-            } else {
-                if (WIFEXITED(waitStatus)) {
-                    currentConcurrentProcesses--;
-                    printf("current concurrent process %d\n", currentConcurrentProcesses);
-                    printf("Child process successfully exited with status: %d\n", waitStatus);
-                    printf("total processes created: %d\n", totalProcessesCreated);
-                    //********************************** EXIT SECTION **********************************************
-                    //******************************** REMAINDER SECTION *******************************************
-                }
-            }
+            /* parent process */
+            semSignal(semS);
+            return;
         }
 
     }
