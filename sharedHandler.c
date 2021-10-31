@@ -1,15 +1,14 @@
 //sharedHandler.c
 
 #include <errno.h>
-#include <stdbool.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 #include "sharedHandler.h"
 
@@ -19,7 +18,15 @@
 static key_t myKey;
 static int semID;
 static int shmID;
+static int parentmsgID;
+static int childmsgID;
+static key_t parentmsgKey;
+static key_t childmsgKey;
 static sharedMem *shmaddr = NULL;
+
+// ******************************************** System Process functions ***********************************************
+
+// ******************************************** Shared Memory functions ***********************************************
 
 void initShm(){
     //********************* SHARED MEMORY PORTION ************************
@@ -31,7 +38,7 @@ void initShm(){
     }
     printf("derived key from, myKey: %d\n", myKey);
 
-    if( (shmID = shmget(myKey, sizeof(sharedMem), PERM)) == -1){
+    if((shmID = shmget(myKey, sizeof(sharedMem), PERM)) == -1){
         perror("Failed to create shared memory segment\n");
         exit(EXIT_FAILURE);
     } else {
@@ -51,8 +58,10 @@ void initShm(){
     //****************** END SHARED MEMORY PORTION ***********************
 }
 
+// ******************************************** Semaphore functions *************************************************
+
 void initSem(){
-    if( (semID = semget(myKey, 1, PERM | IPC_CREAT)) == -1){
+    if((semID = semget(myKey, 1, PERM | IPC_CREAT)) == -1){
         perror("Failed to create semaphore with key\n");
         exit(EXIT_FAILURE);
     } else {
@@ -64,6 +73,21 @@ void initSem(){
 
 sharedMem *getSharedMemory(){
     return shmaddr;
+}
+
+PCB *getPTablePCB( int index ){
+    return &shmaddr->pTable[index];
+}
+
+PCB *getPTablePID( pid_t pid ){
+    int i;
+    for( i = 0; i < 19; i++ ){
+        printf("%d pid: %ld\n", i, shmaddr->pTable[i].userPID);
+        if( pid == shmaddr->pTable[i].userPID )
+            return &shmaddr->pTable[i];
+    }
+
+    printf("couldn't find a match\n");
 }
 
 int removeShm(){
@@ -82,15 +106,22 @@ int removeShm(){
         return 0;
     }
     errno = error;
+    return -1;
+}
 
-    printf("DONE!\n");
+int getFreePTableIndex(){
+    int i;
+    for(i = 0; i < 18; i++){
+        if( shmaddr->pTable[i].userPID == 0 )
+            return i;
+    }
     return -1;
 }
 
 int removeSem(){
+    printf("Removing semaphore...\n");
     return semctl(semID, 0, IPC_RMID);
 }
-
 
 void semWait(struct sembuf semW){
     if (semop(semID, &semW, 1) == -1) {
@@ -120,4 +151,89 @@ void setsembuf(struct sembuf *s, int num, int op, int flg){
     s->sem_op = (short)op;
     s->sem_flg = (short)flg;
     return;
+}
+
+// ******************************************** Message Queue ********************************************************
+
+int initMsq(){
+    if((parentmsgKey = ftok(".",'p')) == (key_t)-1){
+        //if we fail to get our key.
+        fprintf(stderr, "Failed to derive key from filename:\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if((parentmsgID = msgget(parentmsgKey, PERM)) == -1){
+        perror("Failed to create parent message queue\n");
+        exit(EXIT_FAILURE);
+    }
+    printf("Message Queue for parent created\n");
+
+    if((childmsgKey = ftok(".",'c')) == (key_t)-1){
+        //if we fail to get our key.
+        fprintf(stderr, "Failed to derive key from filename:\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if((childmsgID = msgget(childmsgKey, PERM)) == -1){
+        perror("Failed to create child message queue\n");
+        exit(EXIT_FAILURE);
+    }
+    printf("Message Queue for child created\n");
+    return;
+}
+
+int receiveMsg(Message *message, pid_t pid, int msgid, bool waiting){
+    if( msgrcv(msgid, message, sizeof(Message), pid, waiting ? 0: IPC_NOWAIT) > -1 ){
+        //received message!
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+int sendMsg(Message *message, char *msg, pid_t pid, int msgid, bool waiting){
+    message->type = pid;
+    strncpy(message->msg, msg, BUF_LEN);
+    if( msgsnd(msgid, message, sizeof(Message), waiting ? 0: IPC_NOWAIT) > -1 ){
+        //sent message!
+        printf("user %ld: message sent.\n", (long)pid);
+    } else {
+        return -1;
+    }
+}
+
+int removeMsq(){
+    msgctl(parentmsgID, IPC_RMID, NULL);
+    printf("removed parent message queue\n");
+
+    msgctl(childmsgID, IPC_RMID, NULL);
+    printf("removed child message queue\n");
+    return 0;
+}
+
+int getPMsgID(){
+    return parentmsgID;
+}
+
+int getCMsgID(){
+    return childmsgID;
+}
+
+//time handling functions
+void addTime(long timeValue, Time* time){
+    time->ns += timeValue;
+    if(time->ns == SECOND) {
+        time->ns = 0;
+        time->sec += 1;
+    }
+}
+
+void clearTime( Time *time ){
+    time->sec = 0;
+    time->ns = 0;
+}
+
+void copyTime(Time *src, Time *dest){
+    dest->sec = src->sec;
+    dest->ns = src->ns;
 }

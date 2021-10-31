@@ -42,6 +42,13 @@ void myTimeOutHandler( int s ) {
     } else {
         printf("removed semaphore\n");
     }
+
+    if(removeMsq() == -1) {
+        perror("failed to remove message queue\n");
+        exit(0);
+    } else {
+        printf("removed message queue\n");
+    }
     exit(0);
 }
 
@@ -72,6 +79,13 @@ void myKillSignalHandler( int s ){
         exit(0);
     } else {
         printf("removed semaphore\n");
+    }
+
+    if(removeMsq() == -1) {
+        perror("failed to remove message queue\n");
+        exit(0);
+    } else {
+        printf("removed message queue\n");
     }
     exit(0);
 }
