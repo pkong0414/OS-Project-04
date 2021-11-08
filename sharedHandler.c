@@ -1,6 +1,7 @@
 //sharedHandler.c
 
 #include <errno.h>
+#include <math.h>
 #include <stdlib.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
@@ -26,7 +27,7 @@ static sharedMem *shmaddr = NULL;
 
 // ******************************************** System Process functions ***********************************************
 
-// ******************************************** Shared Memory functions ***********************************************
+// ******************************************** Shared Memory functions ************************************************
 
 void initShm(){
     //********************* SHARED MEMORY PORTION ************************
@@ -88,6 +89,13 @@ PCB *getPTablePID( pid_t pid ){
     }
 
     printf("couldn't find a match\n");
+}
+
+void clearAProcessTable( int index ){
+    PCB *pcb = &shmaddr->pTable[index];
+    pcb->userPID = 0;
+    pcb->localPID = -1;
+    pcb->priority = -1;
 }
 
 int removeShm(){
@@ -187,6 +195,7 @@ int receiveMsg(Message *message, pid_t pid, int msgid, bool waiting){
         //received message!
         return 0;
     } else {
+        perror("receive Message.");
         return -1;
     }
 }
@@ -198,6 +207,7 @@ int sendMsg(Message *message, char *msg, pid_t pid, int msgid, bool waiting){
         //sent message!
         printf("user %ld: message sent.\n", (long)pid);
     } else {
+        perror("send Message.");
         return -1;
     }
 }
@@ -220,10 +230,10 @@ int getCMsgID(){
 }
 
 //time handling functions
-void addTime(long timeValue, Time* time){
+void addTime(Time* time, long timeValue){
     time->ns += timeValue;
-    if(time->ns == SECOND) {
-        time->ns = 0;
+    while(time->ns >= SECOND) {
+        time->ns -= SECOND;
         time->sec += 1;
     }
 }
@@ -236,4 +246,26 @@ void clearTime( Time *time ){
 void copyTime(Time *src, Time *dest){
     dest->sec = src->sec;
     dest->ns = src->ns;
+}
+
+int compareLeftGtrEqTime( Time time1, Time time2 ){
+    //this function will two times and will tell if the left is greater than or equal to the right.
+    if( time1.sec > time2.sec){
+        //simplest case we have left side time seconds being greater
+        return 1;
+    } else if ( time2.sec > time1.sec ){
+        //else if time2's second is bigger, then it is false
+        return 0;
+    } else if( time1.sec == time2.sec && time1.ns >= time2.ns ){
+        //We now consider cases of a tie in seconds so we must compare nanoseconds
+        return 1;
+    } else {
+        //failed all the cases so we know that time2 is simply bigger.
+        return 0;
+    }
+}
+
+void calcPSysTime( PCB *pcb, Time sysTime ){
+    pcb->totalSysTime.ns = ( sysTime.ns - pcb->arriveTime.ns );
+    pcb->totalSysTime.sec = ( sysTime.sec - pcb->arriveTime.sec );
 }

@@ -24,7 +24,7 @@ void myTimeOutHandler( int s ) {
     int i;
 
     //waiting for max amount of children to terminate
-    for (i = 0; i <= 20 ; ++i) {
+    for (i = 0; i <= MAX_TOTAL_PROC ; ++i) {
         wait(NULL);
     }
 
@@ -36,12 +36,12 @@ void myTimeOutHandler( int s ) {
         printf("destroyed shared memory segment\n");
     }
 
-    if(removeSem() == -1) {
-        perror("failed to remove semaphore\n");
-        exit(0);
-    } else {
-        printf("removed semaphore\n");
-    }
+//    if(removeSem() == -1) {
+//        perror("failed to remove semaphore\n");
+//        exit(0);
+//    } else {
+//        printf("removed semaphore\n");
+//    }
 
     if(removeMsq() == -1) {
         perror("failed to remove message queue\n");
@@ -63,7 +63,7 @@ void myKillSignalHandler( int s ){
     int i;
 
     //waiting for max amount of children to terminate
-    for (i = 0; i <= 20; ++i) {
+    for (i = 0; i <= MAX_TOTAL_PROC; ++i) {
         wait(NULL);
     }
     //detaching shared memory
@@ -74,12 +74,12 @@ void myKillSignalHandler( int s ){
         printf("destroyed shared memory segment\n");
     }
 
-    if(removeSem() == -1) {
-        perror("failed to remove semaphore\n");
-        exit(0);
-    } else {
-        printf("removed semaphore\n");
-    }
+//    if(removeSem() == -1) {
+//        perror("failed to remove semaphore\n");
+//        exit(0);
+//    } else {
+//        printf("removed semaphore\n");
+//    }
 
     if(removeMsq() == -1) {
         perror("failed to remove message queue\n");

@@ -18,6 +18,7 @@
 #define SECOND 1000000000                                         //a second is 1000000000 nanosecs
 #define MILLI 1000000                                             //a millisecond is 1000000 nanosecs
 #define MACRO 1000                                                //a macrosecond is 1000 nanosecs
+#define QUANTUM 10000000                                          //our quantum base
 
 // shared memory struct
 typedef struct sharedTimer{
@@ -27,23 +28,27 @@ typedef struct sharedTimer{
 
 typedef struct sharedMessage{                                     //Struct contains members for the IPC message Queue
     long type;                                                    //message type
-    char msg[BUF_LEN];                                           //message itself.
+    char msg[BUF_LEN];                                            //message itself.
 } Message;
 
 typedef struct pcb{
-    Time arriveTime;                                              //the time the process first arrived.
-    Time burstTime;                                               //the time used from last burst from the process in the system.
+    Time arriveTime;                                              //the timestamp from first arrived.
+    Time queuedTime;                                              //the timestamp of the time placed in queue
+    Time burstTime;                                               //the amount of timeslice used from the last burst
+    Time timeLimit;                                               //this is our time slice or quantum
     Time totalCpuTime;                                            //total Cpu Time in the system.
-    Time waitTime;                                                //time spent waiting.
+    Time waitTime;                                                //timestamp of the wait, when queued up.
     Time totalWait;                                               //total time spent waiting.
-    Time sysTime;                                                 //total time process spent in the system.
-    pid_t userPID;                                                //Process's user pid
-    unsigned int priority;                                        //Process's priority ( either 1 or 2 )
+    Time totalSysTime;                                            //total time process spent in the system.
+    Time exitTime;                                                //the timestamp from process exiting.
+    int localPID;                                                 //process's PTable id.
+    pid_t userPID;                                                //Process's user actual pid
+    int priority;                                                 //Process's priority ( either 1 or 2 )
 } PCB;
 
 typedef struct sharedMemory{                                      //Process Control Block
     Time sysTime;                                                 //the system time.
-    PCB pTable[18];                                         //process table for the PCB
+    PCB pTable[18];                                               //process table for the PCB
 } sharedMem;
 
 // sharedMemory functions
@@ -52,7 +57,8 @@ int removeShm();                                                  //This functio
 sharedMem *getSharedMemory();
 PCB *getPTablePCB( int index );
 PCB *getPTablePID( pid_t pid );
-int getFreePTableIndex();
+void clearAProcessTable( int index );
+//int getFreePTableIndex();
 
 // semaphore functions
 void initSem();                                                   //This is going to initialize our semaphores.
@@ -71,8 +77,10 @@ int getPMsgID();                                                  //Grabbing the
 int getCMsgID();                                                  //Grabbing the child message queue ID
 
 //time handling functions
-void addTime(long timeValue, Time* time);
+void addTime(Time *time, long timeValue);
 void clearTime( Time *time );
 void copyTime(Time *src, Time *dest);
+int compareLeftGtrEqTime( Time time1, Time time2 );
+void calcPSysTime( PCB *pcb, Time sysTime );
 
 #endif

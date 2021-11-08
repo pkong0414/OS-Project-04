@@ -6,10 +6,10 @@ CFLAGS = -Wall -g -lm
 
 SHARED_OBJ = sharedHandler.o
 SIGNAL_OBJ = signalHandler.o
-#QUEUE_OBJ = queue.o
+QUEUE_OBJ = queue.o
 
 OSS_SRC = oss.c
-OSS_OBJ	= $(OSS_SRC:.c=.o) $(SHARED_OBJ) $(SIGNAL_OBJ) #(QUEUE_OBJ)
+OSS_OBJ	= $(OSS_SRC:.c=.o) $(SHARED_OBJ) $(SIGNAL_OBJ) $(QUEUE_OBJ)
 OSS = oss
 
 USER_SRC = user.c
